@@ -1,12 +1,13 @@
 import numpy as np
+cimport numpy as np
 from sklearn.metrics import accuracy_score
 
 from .node import Node
 from .utils import unique
-from .splitter import CalcRecord, SplitRecord
+from ._splitter cimport CalcRecord, SplitRecord
 
 
-class Tree():
+cdef class Tree:
     """Class for storing the actual tree data"""
 
     def __init__(self,
@@ -22,7 +23,7 @@ class Tree():
         self.feature_nodes = feature_nodes
 
 
-class BaseBuilder():
+cdef class BaseBuilder:
     """Base class for different methods of building decision trees."""
 
     def build(self, tree, X, y):
@@ -33,7 +34,7 @@ class BaseBuilder():
         pass
 
 
-class TreeBuilder(BaseBuilder):
+cdef class TreeBuilder(BaseBuilder):
     """Build a decision tree using the default strategy"""
 
     def __init__(self,
@@ -68,7 +69,7 @@ class TreeBuilder(BaseBuilder):
                 raise ValueError("Can't prune tree without validation data")
             self._prune(tree, X_test, y_test)
 
-    def _build(self, tree, examples_idx, features_idx, depth=0):
+    cdef _build(self, Tree tree, np.ndarray examples_idx, np.ndarray features_idx, int depth=0):
         items, counts = unique(self.y[examples_idx])
         if (features_idx.size == 0
                 or items.size == 1

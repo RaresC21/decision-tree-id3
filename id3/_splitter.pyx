@@ -1,12 +1,13 @@
 import numpy as np
+cimport numpy as np
 from .utils import unique
 
 
-class SplitRecord():
+cdef class SplitRecord:
     LESS = 0
     GREATER = 1
 
-    def __init__(self, calc_record, bag, value_encoded, value_decoded=None):
+    def __init__(self, calc_record, bag, SIZE_t value_encoded, value_decoded=None):
         self.calc_record = calc_record
         self.bag = bag
         self.value_encoded = value_encoded
@@ -14,19 +15,19 @@ class SplitRecord():
         self.size = len(bag) if bag is not None else 0
 
 
-class CalcRecord():
+cdef class CalcRecord:
     NUM = 0
     NOM = 1
 
-    def __init__(self,
-                 split_type,
-                 info,
-                 feature_idx=None,
-                 feature_name=None,
-                 entropy=None,
-                 pivot=None,
-                 attribute_counts=None,
-                 class_counts=None):
+    cdef int init(self,
+                 bint split_type,
+                 DTYPE_t info,
+                 SIZE_t feature_idx=-1,
+                 str feature_name=None,
+                 DTYPE_t entropy=-1,
+                 DTYPE_t pivot=-1,
+                 np.ndarray attribute_counts=None,
+                 np.ndarray class_counts=None):
         self.split_type = split_type
         self.info = info
         self.feature_idx = feature_idx
@@ -36,15 +37,15 @@ class CalcRecord():
         self.class_counts = class_counts
         self.attribute_counts = attribute_counts
 
-    def __lt__(self, other):
+    cdef bint __lt__(self, CalcRecord other):
         if not isinstance(other, CalcRecord):
             return True
         return self.info < other.info
 
 
-class Splitter():
+cdef class Splitter:
 
-    def __init__(self, X, y, is_numerical, encoders, gain_ratio=False):
+    cdef int init(self, object X, np.ndarray[SIZE_t, ndim=2] y, object is_numerical, object encoders, bint gain_ratio=False):
         self.X = X
         self.y = y
         self.is_numerical = is_numerical
@@ -66,18 +67,22 @@ class Splitter():
         : float
             information for remaining examples given feature
         """
-        n = y.shape[0]
+        cdef int n = y.shape[0]
+        cdef float res
+        cdef np.ndarray classes, counts, p, class_counts
+
         if n <= 0:
             return 0
         classes, count = unique(y)
         p = np.true_divide(count, n)
         res = - np.sum(np.multiply(p, np.log2(p)))
         if return_class_counts:
-            return res, np.vstack((classes, count)).T
+            class_counts = np.vstack((classes, count)).T
+            return res, class_counts
         else:
             return res
 
-    def _info_nominal(self, x, y):
+    cdef CalcRecord _info_nominal(self, np.ndarray x, np.ndarray y):
         """ Info for nominal feature feature_values
         :math: p(a)H(a) :math: from
         https://en.wikipedia.org/wiki/ID3_algorithm
@@ -94,14 +99,18 @@ class Splitter():
         : float
             information for remaining examples given feature
         """
-        info = 0
-        n = x.shape[0]
+        cdef float info = 0
+        cdef SIZE_t n = x.shape[0]
+        cdef np.ndarray items, count
+        cdef CalcRecord cr
         items, count = unique(x)
         for value, p in zip(items, count):
             info += p * self._entropy(y[x == value])
-        return CalcRecord(CalcRecord.NOM,
-                          info * np.true_divide(1, n),
-                          attribute_counts=count)
+        cr =  CalcRecord(CalcRecord.NOM,
+                         info * np.true_divide(1, n),
+                         entropy=0,
+                         attribute_counts=count)
+        return cr
 
     def _info_numerical(self, x, y):
         """ Info for numerical feature feature_values
@@ -136,9 +145,6 @@ class Splitter():
             if sorted_x[i - 1] != sorted_x[i]:
                 tmp_info = i * self._entropy(sorted_y[0: i]) + \
                            (n - i) * self._entropy(sorted_y[i:])
-                print("-------------")
-                print(tmp_info)
-                print((sorted_x[i - 1] + sorted_x[i]) / 2.0)
                 if tmp_info < min_info:
                     min_attribute_counts[SplitRecord.LESS] = n - i
                     min_attribute_counts[SplitRecord.GREATER] = i
@@ -190,7 +196,7 @@ class Splitter():
         s = np.true_divide(counts, np.sum(counts))
         return - np.sum(np.multiply(s, np.log2(s)))
 
-    def _is_better(self, calc_record1, calc_record2):
+    def  _is_better(self, calc_record1, calc_record2):
         """Compairs CalcRecords
 
         Parameters
@@ -220,7 +226,7 @@ class Splitter():
         else:
             return calc_record1.info > calc_record2.info
 
-    def calc(self, examples_idx, features_idx):
+    cdef CalcRecord calc(self, np.ndarray examples_idx, np.ndarray features_idx):
         """ Calculates information regarding optimal split based on information
         gain
 
@@ -238,6 +244,10 @@ class Splitter():
         : float
             pivot used set1 < pivot <= set2
         """
+        cdef np.ndarray X_, y_, class_counts
+        cdef CalcRecord calc_record, tmp_calc_record
+        cdef float entropy
+
         X_ = self.X[np.ix_(examples_idx, features_idx)]
         y_ = self.y[examples_idx]
         calc_record = None
@@ -255,7 +265,8 @@ class Splitter():
                 calc_record.feature_idx = features_idx[idx]
         return calc_record
 
-    def split(self, examples_idx, calc_record):
+    def split(self, np.ndarray examples_idx, np.ndarray calc_record):
+        cdef np.ndarray X_
         X_ = self.X[np.ix_(examples_idx)]
         if self.is_numerical[calc_record.feature_idx]:
             return self._split_numerical(X_, examples_idx, calc_record)

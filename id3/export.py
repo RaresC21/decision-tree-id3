@@ -1,5 +1,5 @@
 from sklearn.externals import six
-from .splitter import SplitRecord, CalcRecord
+from ._splitter import SplitRecord, CalcRecord
 import numpy as np
 
 

@@ -8,9 +8,12 @@ __pycache__/
 *.dot
 *.pdf
 simple4.arff
+breast_cancer.arff
 
 # C extensions
 *.so
+_splitter.c
+_tree.c
 
 # scikit-learn specific
 doc/_build/
