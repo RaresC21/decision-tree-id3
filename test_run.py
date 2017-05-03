@@ -6,9 +6,9 @@ import time
 
 
 def run():
-    #X, y, targets = load_data("simple4.arff")
-    bunch = load_breast_cancer()
-    X, y, targets = bunch.data, bunch.target, bunch.feature_names
+    X, y, targets = load_data("simple4.arff")
+    #bunch = load_breast_cancer()
+    #X, y, targets = bunch.data, bunch.target, bunch.feature_names
     id3Estimator = Id3Estimator(prune=False)
     t = time.time()
     id3Estimator.fit(X, y)

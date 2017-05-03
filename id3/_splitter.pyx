@@ -10,7 +10,7 @@ cdef class SplitRecord:
     LESS = 0
     GREATER = 1
 
-    def __init__(self, CalcRecord calc_record, np.ndarray bag, SIZE_t value_encoded, str value_decoded=None):
+    def __init__(self, CalcRecord calc_record, np.ndarray bag, SIZE_t value_encoded, object value_decoded=None):
         self.calc_record = calc_record
         self.bag = bag
         self.value_encoded = value_encoded
@@ -58,7 +58,7 @@ cdef class Splitter:
     @cython.cdivision(True)
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    def _entropy(self, np.ndarray[SIZE_t, ndim=1] y, bint return_class_counts=False):
+    cdef object _entropy_full(self, np.ndarray[SIZE_t, ndim=1] y):
         """ Entropy for the classes in the array y
         :math: \sum_{x \in X} p(x) \log_{2}(1/p(x)) :math: from
         https://en.wikipedia.org/wiki/ID3_algorithm
@@ -78,25 +78,57 @@ cdef class Splitter:
         cdef SIZE_t j
         cdef np.ndarray[SIZE_t, ndim=1] classes
         cdef np.ndarray[SIZE_t, ndim=1] count
-        cdef np.ndarray[SIZE_t, ndim=1] class_count
-        cdef np.ndarray[DTYPE_t, ndim=1] p
+        cdef np.ndarray[SIZE_t, ndim=2] class_counts
         cdef DTYPE_t res = 0
+        cdef DTYPE_t p
 
         if n <= 0:
             return 0
         classes, count = unique(y)
-        p = np.zeros(count.shape[0], dtype=np.float32)
-        for i in range(p.shape[0]):
-            p[i] = count[i] / <float> n
-        for j in range(p.shape[0]):
-            res = res - (p[j] * log2(p[j]))
-        if return_class_counts:
-            class_counts = np.vstack((classes, count)).T
-            return res, class_counts
-        else:
-            return res
+        for i in range(count.shape[0]):
+            p = count[i] / <float> n
+            res = res - (p * log2(p))
+        class_counts = np.vstack((classes, count)).T
+        return res, class_counts
 
-    cdef CalcRecord _info_nominal(self, np.ndarray x, np.ndarray y):
+    @cython.cdivision(True)
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    cdef float _entropy(self, np.ndarray[SIZE_t, ndim=1] y):
+        """ Entropy for the classes in the array y
+        :math: \sum_{x \in X} p(x) \log_{2}(1/p(x)) :math: from
+        https://en.wikipedia.org/wiki/ID3_algorithm
+
+        Parameters
+        ----------
+        y : nparray of shape [n remaining attributes]
+            containing the class names
+
+        Returns
+        -------
+        : float
+            information for remaining examples given feature
+        """
+        cdef SIZE_t n = y.shape[0]
+        cdef SIZE_t i
+        cdef np.ndarray[SIZE_t, ndim=1] classes
+        cdef np.ndarray[SIZE_t, ndim=1] count
+        cdef DTYPE_t res = 0
+        cdef DTYPE_t p
+
+        if n <= 0:
+            return 0
+        classes, count = unique(y)
+        for i in range(count.shape[0]):
+            p = count[i] / <float> n
+            res = res - (p * log2(p))
+        return res
+
+    @cython.cdivision(True)
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.nonecheck(False)
+    cdef CalcRecord _info_nominal(self, np.ndarray[DTYPE_t, ndim=1] x, np.ndarray[SIZE_t, ndim=1] y):
         """ Info for nominal feature feature_values
         :math: p(a)H(a) :math: from
         https://en.wikipedia.org/wiki/ID3_algorithm
@@ -115,12 +147,12 @@ cdef class Splitter:
         """
         cdef DTYPE_t info
         cdef SIZE_t n = x.shape[0]
-        cdef np.ndarray items, count
+        cdef np.ndarray[SIZE_t, ndim=1] items, count
         cdef CalcRecord cr
-        cdef SIZE_t length
+        cdef SIZE_t i
+
         items, count = unique(x)
-        length = items.shape[0]
-        for i in range(length):
+        for i in range(count.shape[0]):
             info += count[i] * self._entropy(y[x == items[i]])
         cr =  CalcRecord(CalcRecord.NOM,
                          info * np.true_divide(1, n),
@@ -128,6 +160,9 @@ cdef class Splitter:
                          attribute_counts=count)
         return cr
 
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    @cython.nonecheck(False)
     cdef CalcRecord _info_numerical(self,
                                     np.ndarray[DTYPE_t, ndim=1] x,
                                     np.ndarray[SIZE_t, ndim=1] y):
@@ -155,8 +190,10 @@ cdef class Splitter:
         cdef np.ndarray[DTYPE_t, ndim=1] sorted_x
         cdef DTYPE_t min_info, tmp_info
         cdef DTYPE_t min_info_pivot = 0
-        cdef np.ndarray min_attribute_counts = np.zeros(2, dtype=np.int)
+        cdef np.ndarray[SIZE_t, ndim=1] min_attribute_counts = np.empty(2, dtype=np.intp)
+        cdef np.ndarray[SIZE_t, ndim=1] tmp
         cdef SIZE_t i
+        cdef SIZE_t j
         cdef DTYPE_t x_max = 0
         cdef DTYPE_t x_min = 0
 
@@ -165,21 +202,25 @@ cdef class Splitter:
             if x[i] > x_max:
                 x_max = x[i]
             if x[i] < x_min:
-                x_min = x_min
+                x_min = x[i]
         if x_max == x_min:
+            tmp = np.array([n], dtype=np.intp)
             cr =  CalcRecord(None,
                              self._entropy(y),
-                             attribute_counts=np.array([n]))
+                             attribute_counts=tmp)
             return cr
         sorted_idx = np.argsort(x, kind='quicksort')
-        sorted_y = np.take(y, sorted_idx, axis=0)
-        sorted_x = np.take(x, sorted_idx, axis=0)
+        sorted_y = np.empty(sorted_idx.shape[0], dtype=np.intp)
+        sorted_x = np.empty(sorted_idx.shape[0], dtype=np.float32)
+        for j in range(sorted_idx.shape[0]):
+            sorted_y[j] = y[sorted_idx[j]]
+            sorted_x[j] = x[sorted_idx[j]]
         min_info = np.inf
         min_info_pivot = 0
         for i in range(1, n):
             if sorted_x[i - 1] != sorted_x[i]:
-                tmp_info = i * self._entropy(sorted_y[0: i]) + \
-                           (n - i) * self._entropy(sorted_y[i:])
+                tmp_info = (i * self._entropy(sorted_y[0: i]) +
+                           (n - i) * self._entropy(sorted_y[i:]))
                 if tmp_info < min_info:
                     min_attribute_counts[SplitRecord.LESS] = n - i
                     min_attribute_counts[SplitRecord.GREATER] = i
@@ -298,7 +339,7 @@ cdef class Splitter:
         X_ = self.X[np.ix_(examples_idx, features_idx)]
         y_ = self.y[examples_idx]
         calc_record = None
-        entropy, class_counts = self._entropy(y_, True)
+        entropy, class_counts = self._entropy_full(y_)
         for idx, feature in enumerate(X_.T):
             tmp_calc_record = None
             if self.is_numerical[features_idx[idx]]:
