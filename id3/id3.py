@@ -7,7 +7,7 @@ from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 from sklearn.base import BaseEstimator
 from sklearn.model_selection import train_test_split
 
-from ._tree import TreeBuilder, Tree
+from .tree import TreeBuilder, Tree
 from ._splitter import Splitter
 from .utils import check_numerical_array, ExtendedLabelEncoder
 

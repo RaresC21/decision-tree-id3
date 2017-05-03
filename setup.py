@@ -14,9 +14,11 @@ except ImportError:
     sys.exit(1)
 
 
+"""
 _tree = Extension('id3._tree',
                   sources=['id3/_tree.pyx'],
                   include_dirs=[numpy.get_include()])
+"""
 _splitter = Extension('id3._splitter',
                       sources=['id3/_splitter.pyx'],
                       include_dirs=[numpy.get_include()])
@@ -31,7 +33,7 @@ config = {
         'install_requires': INSTALL_REQUIRES,
         'author_email': 'svaante@gmail.com, otto.nordander@gmail.com',
         'cmdclass': {'build_ext': build_ext},
-        'ext_modules': [_tree, _splitter]
+        'ext_modules': [_splitter]
         }
 
 if __name__ == '__main__':
