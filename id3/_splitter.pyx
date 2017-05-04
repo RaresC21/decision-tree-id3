@@ -94,7 +94,7 @@ cdef class Splitter:
     @cython.cdivision(True)
     @cython.boundscheck(False)
     @cython.wraparound(False)
-    cdef float _entropy(self, np.ndarray[SIZE_t, ndim=1] y):
+    cdef float _entropy(self, SIZE_t[:] y):
         """ Entropy for the classes in the array y
         :math: \sum_{x \in X} p(x) \log_{2}(1/p(x)) :math: from
         https://en.wikipedia.org/wiki/ID3_algorithm
@@ -111,16 +111,21 @@ cdef class Splitter:
         """
         cdef SIZE_t n = y.shape[0]
         cdef SIZE_t i
-        cdef np.ndarray[SIZE_t, ndim=1] classes
-        cdef np.ndarray[SIZE_t, ndim=1] count
+        cdef SIZE_t j
+        cdef np.ndarray[INT32_t, ndim=1] count = np.zeros(y.shape[0], dtype=np.int32)
         cdef DTYPE_t res = 0
-        cdef DTYPE_t p
+        cdef DTYPE_t p = 0
 
-        if n <= 0:
+        if n == 0:
             return 0
-        classes, count = unique(y)
-        for i in range(count.shape[0]):
-            p = count[i] / <float> n
+
+        for i in range(y.shape[0]):
+            count[y[i]] += 1
+
+        for j in range(y.shape[0]):
+            if count[j] == 0:
+                continue
+            p = count[j] / <float> n
             res = res - (p * log2(p))
         return res
 
@@ -128,7 +133,7 @@ cdef class Splitter:
     @cython.boundscheck(False)
     @cython.wraparound(False)
     @cython.nonecheck(False)
-    cdef CalcRecord _info_nominal(self, np.ndarray[DTYPE_t, ndim=1] x, np.ndarray[SIZE_t, ndim=1] y):
+    def _info_nominal(self, np.ndarray[DTYPE_t, ndim=1] x, np.ndarray[SIZE_t, ndim=1] y):
         """ Info for nominal feature feature_values
         :math: p(a)H(a) :math: from
         https://en.wikipedia.org/wiki/ID3_algorithm

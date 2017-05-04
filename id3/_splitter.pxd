@@ -31,11 +31,11 @@ cdef class Splitter:
     cdef public object encoders
     cdef public bint gain_ratio
 
-    cdef CalcRecord _info_nominal(self, np.ndarray x, np.ndarray y)
+    #cdef CalcRecord _info_nominal(self, np.ndarray x, np.ndarray y)
     cdef CalcRecord _info_numerical(self, np.ndarray x, np.ndarray y)
     #cdef SplitRecord _split_nominal(self, np.ndarray X_, np.ndarray examples_idx, CalcRecord calc_record)
     cdef list _split_numerical(self, np.ndarray X_, np.ndarray examples_idx, CalcRecord calc_record)
-    cdef float _entropy(self, np.ndarray[SIZE_t, ndim=1] y)
+    cdef float _entropy(self, SIZE_t[:] y)
     cdef object _entropy_full(self, np.ndarray[SIZE_t, ndim=1] y)
     cpdef CalcRecord calc(self, np.ndarray examples_idx, np.ndarray features_idx)
     cdef bint _is_better(self, CalcRecord calc_record1, CalcRecord calc_record2)
